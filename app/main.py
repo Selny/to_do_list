@@ -34,8 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-c_id=-1
-
 @app.post('/')
 async def sign_up(username:str,password:str,repeatpassword:str):
     s=Session()
@@ -57,12 +55,10 @@ async def sign_up(username:str,password:str,repeatpassword:str):
 
 @app.get('/')
 async def login(username:str,password:str):
-    global c_id
     s = Session()
     user = s.query(User).filter(User.username == username).first()
     if user.username == username and auth_handler.verify_password(password, user.password):
         token = auth_handler.encode_token(user.id)
-        c_id=user.id
         return token
     return 'Username or password is wrong'
 
@@ -70,37 +66,31 @@ async def login(username:str,password:str):
 def show_tasks(id = Depends(auth_handler.auth_wrapper)):
     s = Session()
 
-    if c_id == -1:
-        return 'you are  not logged in'
-
-    tasks = s.query(Task).filter(Task.user_id==c_id).all()
+    tasks = s.query(Task).filter(Task.user_id==id).all()
     s.close
     return tasks
 
 @app.post('/tasks')
-async def add_task(title: str, rank: int):
-    global c_id
-    if c_id == -1:
-       return 'you are  not logged in'
+async def add_task(title: str, rank: int, id = Depends(auth_handler.auth_wrapper)):
+
     s = Session()
 
     task = Task(
         title = title,
         rank = rank,
-        user_id = c_id
+        user_id = id
     )
 
     s.add(task)
     s.commit()
     s.close()
 
-@app.put('/tasks/{id}')
-async def update_task(id: int, title: str | None = None, rank: int | None = None):
-    if c_id ==  -1:
-       return 'you are  not logged in'
+@app.put('/tasks/{task_id}')
+async def update_task(task_id: int, title: str | None = None, rank: int | None = None, id = Depends(auth_handler.auth_wrapper)):
+
     s = Session()
 
-    task = s.query(Task).filter(Task.user_id==c_id, Task.id == id).first()
+    task = s.query(Task).filter(Task.user_id==id, Task.id == task_id).first()
 
     if task is None:
         raise HTTPException(status_code = 404, detail = 'Id does not exist')
@@ -113,13 +103,12 @@ async def update_task(id: int, title: str | None = None, rank: int | None = None
     s.commit()
     s.close()
 
-@app.delete('/tasks/{id}')
-async def delete_task(id: int):
-    if c_id == -1:
-       return 'you are  not logged in' 
+@app.delete('/tasks/{task_id}')
+async def delete_task(task_id: int, id = Depends(auth_handler.auth_wrapper)):
+
     s = Session()
 
-    task = s.query(Task).filter(Task.user_id==c_id, Task.id == id).first()
+    task = s.query(Task).filter(Task.user_id==id, Task.id == task_id).first()
 
     if task is None:
         raise HTTPException(status_code = 404, detail = 'Id does not exist')
@@ -128,32 +117,26 @@ async def delete_task(id: int):
     s.commit()
     s.close()
 
-@app.put('/tasks/check/{id}')
+@app.put('/tasks/check/{task_id}')
 async def check_task(id: int):
-    if c_id == -1:
-       return 'you are  not logged in'
     if s.query(Task).filter(Task.id!=id).first():
         raise HTTPException(status_code = 404, detail = 'Id does not exist')
     s = Session()
-    task = s.query(Task).filter(Task.user_id==c_id, Task.id == id).first()
+    task = s.query(Task).filter(Task.user_id==id, Task.id == task_id).first()
     task.done = not task.done
     s.commit()
     s.close()
 
 @app.get('/tasks_done')
-async def show_tasks():
-    if c_id == -1:
-       return 'you are  not logged in' 
+async def show_completed_tasks(id = Depends(auth_handler.auth_wrapper)):
     s = Session()
-    task = s.query(Task).filter(Task.user_id==c_id, Task.done == True).all()
+    task = s.query(Task).filter(Task.user_id==id, Task.done == True).all()
     s.close()
     return task
 
 @app.get('/sort_tasks')
-async def sort_task():
-    if c_id == -1:
-       return 'you are  not logged in' 
+async def sort_task(id = Depends(auth_handler.auth_wrapper)):
     s = Session()
-    task = s.query(Task).filter(Task.user_id==c_id).order_by(Task.rank).all()
+    task = s.query(Task).filter(Task.user_id==id).order_by(Task.rank).all()
     s.close()
     return task
